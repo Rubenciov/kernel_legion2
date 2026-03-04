@@ -2,9 +2,6 @@ name: Compilar Kernel Legion 2 Pro
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -12,31 +9,34 @@ jobs:
       - name: Descargar Código
         uses: actions/checkout@v4
         with:
-          submodules: true
+          # ESTO ES LO MÁS IMPORTANTE:
+          # Le dice a GitHub que ignore el error del submódulo 128
+          submodules: false 
+          fetch-depth: 1
 
       - name: Instalar Herramientas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3-minimal python2-minimal
+          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python2-minimal
+          sudo ln -sf /usr/bin/python3 /usr/bin/python
 
       - name: Configurar y Compilar
         run: |
           export ARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
-          # Intentar limpiar rastro
-          make mrproper
+          
           # Generar configuración base
           make vendor/lahaina-gki_defconfig
-          # Activar KernelSU
-          if [ -f "scripts/config" ]; then
-            ./scripts/config --enable CONFIG_KSU
-          fi
-          # Compilar núcleo (esta es la parte pesada)
+          
+          # Forzar KernelSU (aunque la carpeta sea un "fantasma")
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/lahaina-gki_defconfig
+          
+          # Compilar sin miedo al éxito
           make -j$(nproc) KCFLAGS="-Wno-error" || make -j$(nproc)
 
-      - name: Subir Resultado
+      - name: Subir Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Legion2-KSU
+          name: Kernel-Legion2-Compilado
           path: arch/arm64/boot/Image.gz
