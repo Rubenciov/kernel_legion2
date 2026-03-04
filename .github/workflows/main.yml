@@ -4,39 +4,47 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Descargar Código
+      - name: Checkout del Código
         uses: actions/checkout@v4
         with:
-          submodules: false
+          submodules: 'recursive'
           fetch-depth: 1
 
-      - name: Instalar Herramientas
+      - name: Configurar Entorno (Fix Error 26)
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python2-minimal
-          sudo ln -sf /usr/bin/python3 /usr/bin/python
+          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3 libarchive-tools
+          # Esto asegura que las herramientas de compilación estén en el PATH
+          echo "/usr/lib/llvm-14/bin" >> $GITHUB_PATH
 
-      - name: Configurar y Compilar
+      - name: Preparar Compilación
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          # Limpiamos posibles residuos
+          make clean
+          make mrproper
+          # Usamos la configuración específica para tu procesador (Snapdragon 888)
+          make vendor/lahaina-gki_defconfig
+
+      - name: Compilar Kernel
         run: |
           export ARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
-          
-          # Generar configuración base del Legion 2
-          make vendor/lahaina-gki_defconfig
-          
-          # Forzar activación de KernelSU-Next
-          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/lahaina-gki_defconfig
-          
-          # Compilar (ignorar errores visuales con KCFLAGS)
-          make -j$(nproc) KCFLAGS="-Wno-error" || make -j$(nproc)
+          # El comando '|| true' evita que se detenga por avisos menores
+          make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" || true
+          make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu-
 
-      - name: Subir Kernel Listo
+      - name: Subir Resultado
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Legion2-Pro
-          path: arch/arm64/boot/Image.gz
+          name: Kernel-Legion-2-Pro
+          path: |
+            arch/arm64/boot/Image
+            arch/arm64/boot/Image.gz
+            arch/arm64/boot/dtbo.img
