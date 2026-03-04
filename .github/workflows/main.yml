@@ -6,56 +6,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Descargar Código Base
+      - name: Descargar Código
         uses: actions/checkout@v4
         with:
-          submodules: false
+          submodules: false # Ignoramos los submódulos rotos
           fetch-depth: 1
 
-      - name: Instalar Dependencias del Sistema
+      - name: Instalar Herramientas Esenciales
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3 git wget
+          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3 wget git
 
-      - name: Descargar Herramientas de Compilacion (Clang)
+      - name: Descargar Toolchain Proton (Clang 13)
         run: |
-          mkdir toolchain
-          cd toolchain
-          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.0/clang+llvm-14.0.0-x86_64-linux-gnu-ubuntu-18.04.tar.xz
-          tar -xf clang+llvm-14.0.0-x86_64-linux-gnu-ubuntu-18.04.tar.xz
-          echo "$(pwd)/clang+llvm-14.0.0-x86_64-linux-gnu-ubuntu-18.04/bin" >> $GITHUB_PATH
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+          echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Descargar KernelSU-Next
+      - name: Configurar y Compilar
         run: |
-          rm -rf KernelSU-Next
-          git clone https://github.com/rifsxd/KernelSU-Next KernelSU-Next
-
-      - name: Compilar
-        run: |
+          # Definimos variables de entorno
           export ARCH=arm64
-          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CC=clang
+          export AR=llvm-ar
           export NM=llvm-nm
           export OBJCOPY=llvm-objcopy
-          export LD=ld.lld
-          
-          # 1. Configurar
-          make O=out vendor/lahaina-gki_defconfig
-          
-          # 2. Compilar (Usamos O=out para que sea mas limpio)
-          make -j$(nproc) O=out \
-              CC=clang \
-              LD=ld.lld \
-              AR=llvm-ar \
-              NM=llvm-nm \
-              OBJCOPY=llvm-objcopy \
-              OBJDUMP=llvm-objdump \
-              STRIP=llvm-strip \
-              CROSS_COMPILE=aarch64-linux-gnu- \
-              CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export OBJDUMP=llvm-objdump
+          export STRIP=llvm-strip
+
+          # 1. Crear configuración base
+          make vendor/lahaina-gki_defconfig
+
+          # 2. Compilar (Ignorando errores de código antiguos)
+          make -j$(nproc) KCFLAGS="-Wno-error"
 
       - name: Subir Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Legion2-Listo
-          path: out/arch/arm64/boot/Image.gz
+          name: Kernel-Legion2-Pro
+          path: arch/arm64/boot/Image.gz
