@@ -8,43 +8,41 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout del Código
+      - name: Descargar Código Base
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          # Ponemos esto en 'false' para que no de el error 128
+          submodules: false
           fetch-depth: 1
 
-      - name: Configurar Entorno (Fix Error 26)
+      - name: Instalar Herramientas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3 libarchive-tools
-          # Esto asegura que las herramientas de compilación estén en el PATH
+          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3
           echo "/usr/lib/llvm-14/bin" >> $GITHUB_PATH
 
-      - name: Preparar Compilación
+      - name: Descargar KernelSU-Next Manual (Fix Error 128)
         run: |
-          export ARCH=arm64
-          export SUBARCH=arm64
-          # Limpiamos posibles residuos
-          make clean
-          make mrproper
-          # Usamos la configuración específica para tu procesador (Snapdragon 888)
-          make vendor/lahaina-gki_defconfig
+          # Si la carpeta KernelSU-Next ya existe pero está vacía, la borramos
+          rm -rf KernelSU-Next
+          # La descargamos directamente desde su fuente oficial
+          git clone https://github.com/rifsxd/KernelSU-Next KernelSU-Next
 
-      - name: Compilar Kernel
+      - name: Preparar y Compilar
         run: |
           export ARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
-          # El comando '|| true' evita que se detenga por avisos menores
+          
+          # Configuración para Snapdragon 888 (Legion 2)
+          make vendor/lahaina-gki_defconfig
+          
+          # Compilar ignorando errores de avisos
           make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error" || true
           make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu-
 
-      - name: Subir Resultado
+      - name: Subir Archivos
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-Legion-2-Pro
-          path: |
-            arch/arm64/boot/Image
-            arch/arm64/boot/Image.gz
-            arch/arm64/boot/dtbo.img
+          path: arch/arm64/boot/Image.gz
