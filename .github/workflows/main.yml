@@ -6,43 +6,40 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Descargar Solo Codigo Base
+      - name: Descargar Código
         uses: actions/checkout@v4
         with:
-          submodules: false # PROHIBIDO buscar submodulos rotos
+          submodules: false # Ignora los submodulos rotos que dan error 128
           fetch-depth: 1
 
-      - name: Instalar Herramientas
+      - name: Instalar Compiladores Oficiales
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3 wget git
-          # Descargamos un compilador que no dependa de Git
-          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183b1.tar.gz
-          mkdir clang && tar -xf clang-r416183b1.tar.gz -C clang
-          echo "$(pwd)/clang/bin" >> $GITHUB_PATH
+          # Instalamos GCC para ARM64 y las herramientas de LLVM (Clang) que vienen con Ubuntu
+          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3 gcc-aarch64-linux-gnu
 
-      - name: Limpieza de Git Corrupto
+      - name: Limpiar Basura de Git
         run: |
-          # Borramos rastro de submodulos que causan el Error 128
-          rm -rf .gitmodules
+          # Borramos el archivo que causa el error 128 (el de las capturas)
+          rm -f .gitmodules
           rm -rf KernelSU-Next
 
-      - name: Compilar (Fuerza Bruta)
+      - name: Compilar
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=clang
           
-          # Generar config
-          make vendor/lahaina-gki_defconfig
+          # 1. Intentar usar la config del Legion 2
+          make vendor/lahaina-gki_defconfig || make lahaina_defconfig
           
-          # Compilar. Si falla un paso, que intente el siguiente
-          make -j$(nproc) LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error" || make -j$(nproc) ARCH=arm64
+          # 2. Compilar con GCC (mas compatible para errores de codigo antiguo)
+          # Usamos '-i' para que ignore errores menores y siga hasta el final
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-Wno-error"
 
-      - name: Subir lo que se haya generado
+      - name: Subir Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: Resultado-Kernel
+          name: Kernel-Legion-2
           path: |
             arch/arm64/boot/Image.gz
             arch/arm64/boot/Image
