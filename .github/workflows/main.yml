@@ -6,43 +6,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Descargar Código
+      - name: Descargar Solo Codigo Base
         uses: actions/checkout@v4
         with:
-          submodules: false # Ignoramos los submódulos rotos
+          submodules: false # PROHIBIDO buscar submodulos rotos
           fetch-depth: 1
 
-      - name: Instalar Herramientas Esenciales
+      - name: Instalar Herramientas
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev python3 python-is-python3 wget git
-
-      - name: Descargar Toolchain Proton (Clang 13)
-        run: |
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+          # Descargamos un compilador que no dependa de Git
+          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183b1.tar.gz
+          mkdir clang && tar -xf clang-r416183b1.tar.gz -C clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Configurar y Compilar
+      - name: Limpieza de Git Corrupto
         run: |
-          # Definimos variables de entorno
+          # Borramos rastro de submodulos que causan el Error 128
+          rm -rf .gitmodules
+          rm -rf KernelSU-Next
+
+      - name: Compilar (Fuerza Bruta)
+        run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CC=clang
-          export AR=llvm-ar
-          export NM=llvm-nm
-          export OBJCOPY=llvm-objcopy
-          export OBJDUMP=llvm-objdump
-          export STRIP=llvm-strip
-
-          # 1. Crear configuración base
+          
+          # Generar config
           make vendor/lahaina-gki_defconfig
+          
+          # Compilar. Si falla un paso, que intente el siguiente
+          make -j$(nproc) LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error" || make -j$(nproc) ARCH=arm64
 
-          # 2. Compilar (Ignorando errores de código antiguos)
-          make -j$(nproc) KCFLAGS="-Wno-error"
-
-      - name: Subir Kernel
+      - name: Subir lo que se haya generado
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Legion2-Pro
-          path: arch/arm64/boot/Image.gz
+          name: Resultado-Kernel
+          path: |
+            arch/arm64/boot/Image.gz
+            arch/arm64/boot/Image
