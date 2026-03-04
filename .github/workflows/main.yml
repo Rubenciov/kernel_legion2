@@ -5,13 +5,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - name: Descargar Código
         uses: actions/checkout@v4
         with:
-          # ESTO ES LO MÁS IMPORTANTE:
-          # Le dice a GitHub que ignore el error del submódulo 128
-          submodules: false 
+          submodules: false
           fetch-depth: 1
 
       - name: Instalar Herramientas
@@ -26,17 +26,17 @@ jobs:
           export LLVM=1
           export LLVM_IAS=1
           
-          # Generar configuración base
+          # Generar configuración base del Legion 2
           make vendor/lahaina-gki_defconfig
           
-          # Forzar KernelSU (aunque la carpeta sea un "fantasma")
+          # Forzar activación de KernelSU-Next
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/lahaina-gki_defconfig
           
-          # Compilar sin miedo al éxito
+          # Compilar (ignorar errores visuales con KCFLAGS)
           make -j$(nproc) KCFLAGS="-Wno-error" || make -j$(nproc)
 
-      - name: Subir Kernel
+      - name: Subir Kernel Listo
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Legion2-Compilado
+          name: Kernel-Legion2-Pro
           path: arch/arm64/boot/Image.gz
