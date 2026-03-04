@@ -1,0 +1,31 @@
+name: Compilar Kernel Legion 2 Pro
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Descargar Código
+        uses: actions/checkout@v3
+
+      - name: Instalar Herramientas de Compilación
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential flex bison lld llvm libssl-dev libelf-dev
+
+      - name: Compilar Kernel con KernelSU
+        run: |
+          export ARCH=arm64
+          export LLVM=1
+          export LLVM_IAS=1
+          # Aquí el robot hace lo que Termux no podía
+          make vendor/lahaina-gki_defconfig
+          scripts/config --enable CONFIG_KSU
+          make -j$(nproc) KCFLAGS="-Wno-error"
+
+      - name: Subir Archivo Final
+        uses: actions/upload-artifact@v3
+        with:
+          name: Kernel-KernelSU-Legion2
+          path: arch/arm64/boot/Image.gz
